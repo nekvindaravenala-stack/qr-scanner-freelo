@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toyota Dashboard - Přehled zakázek 29.10.2025</title>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .header h1 {
+            color: #2d3748;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #718096;
+            font-size: 16px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card h3 {
+            color: #718096;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .value {
+            color: #2d3748;
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card .label {
+            color: #a0aec0;
+            font-size: 14px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .chart-container h2 {
+            color: #2d3748;
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow-x: auto;
+        }
+        
+        .search-box {
+            margin-bottom: 20px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        th {
+            background: #f7fafc;
+            color: #2d3748;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px;
+            border-bottom: 2px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #4a5568;
+        }
+        
+        tr:hover {
+            background: #f7fafc;
+        }
+        
+        .order-group-0 {
+            background: rgba(59, 130, 246, 0.2);
+        }
+        
+        .order-group-1 {
+            background: rgba(236, 72, 153, 0.2);
+        }
+        
+        .order-group-2 {
+            background: rgba(16, 185, 129, 0.2);
+        }
+        
+        .order-group-0:hover,
+        .order-group-1:hover,
+        .order-group-2:hover {
+            opacity: 0.7;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-aktivni {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        canvas {
+            max-height: 400px;
+        }
+        
+        .qr-code {
+            width: 80px;
+            height: 80px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .qr-code:hover {
+            transform: scale(2.5);
+            z-index: 1000;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 Toyota Dashboard</h1>
+            <p>Přehled dodacích listů a zakázek - 29.10.2025</p>
+        </div>
+        
+        <div class="stats-grid" id="statsGrid"></div>
+        
+        <div class="chart-container">
+            <h2>📈 Přehled materiálu podle objednávek</h2>
+            <canvas id="chartObjednavky"></canvas>
+        </div>
+        
+        <div class="table-container">
+            <h2>📋 Detail zakázek</h2>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 Hledat v tabulce...">
+            </div>
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>QR kód</th>
+                        <th>Dodací list</th>
+                        <th>Kód</th>
+                        <th>Číslo objednávky</th>
+                        <th>Název zakázky</th>
+                        <th>Stav</th>
+                        <th>Zadáno</th>
+                        <th>Termín do</th>
+                        <th>Do dokončení</th>
+                        <th>Plán MJ</th>
+                        <th>Zbývá vydat</th>
+                        <th>Vydáno</th>
+                        <th>Materiál předpokl.</th>
+                        <th>Vytvořil</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const csvData = `Dodací list číslo;Kód;Číslo objednávky;Název zakázky;Stav;Zadáno;Termín do;Do dokončení zbývá;Plán MJ;Zbývá vydat na dod. listech;Vydáno na dod. listech;Výkres;Vytvořil;Poslední změna;Materiál predpokl.
+2500520-1;SD20250218;640126495;C-TOY-14.2-800-N   ;Aktivní;25.08.2025;29.10.2025;0 dnů;10,000;6,000;4,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;25.08.2025 13:12;137 830,00
+;SD20250238;640127097;C-TOY-14.3-L-800-N ,;Aktivní;09.09.2025;03.11.2025;3 dny;5,000;5,000;0,000;TOY-14.3-L-800-N_0000.00;DRAHOSOVA;09.09.2025 13:26;87 563,32
+;SD20250241;640127120;C-TOY-14.4-800-N   ,;Aktivní;10.09.2025;03.11.2025;3 dny;4,000;4,000;0,000;TOY-14.4-800-N_0000.00 vers. 00;DRAHOSOVA;29.09.2025 12:12;63 773,84
+;SD20250269;640128304;C-TOY-14.6-FAR-165,;Aktivní;13.10.2025;03.11.2025;3 dny;2,000;2,000;0,000;TOY-14.6-FAR-165_0000.00 vers. 00;DRAHOSOVA;22.10.2025 18:16;4 185,44
+;SD20250217;640126495;C-TOY-14.4-R-800   , ;Aktivní;25.08.2025;05.11.2025;5 dny;1,000;1,000;0,000;TOY-14.4-R-800_0000.00;DRAHOSOVA;25.08.2025 13:11;16 595,06
+;SD20250252;640127787;C-TOY-14.1-800-N  ,;Aktivní;26.09.2025;07.11.2025;7 dnů;1,000;1,000;0,000;TOY-14.1-800-N_0000.00;DRAHOSOVA;10.10.2025 07:31;15 703,28
+;SD20250253;640127787;C-TOY-14.4-L-800-N   ,;Aktivní;26.09.2025;07.11.2025;7 dnů;1,000;1,000;0,000;TOY-14.4-L-800-N_0000.00;DRAHOSOVA;10.10.2025 07:32;17 262,56
+;SD20250237;640127099;C-TOY-14.2-800-N   ;Aktivní;09.09.2025;11.11.2025;9 dnů;10,000;10,000;0,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;09.09.2025 13:22;137 830,00
+;SD20250256;640127970;C-TOY-14.3-R-800-N , ;Aktivní;02.10.2025;11.11.2025;9 dnů;2,000;2,000;0,000;TOY-14.3-R-800-N_0000.00 vers. 00;DRAHOSOVA;02.10.2025 12:29;35 025,12
+;SD20250257;640127970;C-TOY-14.3-L-800-N ,;Aktivní;02.10.2025;11.11.2025;9 dnů;5,000;5,000;0,000;TOY-14.3-L-800-N_0000.00;DRAHOSOVA;02.10.2025 12:30;87 563,32
+;SD20250244;640127371;C-TOY-14.3-R-800-N , ;Aktivní;16.09.2025;12.11.2025;10 dnů;3,000;3,000;0,000;TOY-14.3-R-800-N_0000.00 vers. 00;DRAHOSOVA;16.09.2025 13:43;0,00
+;SD20250245;640127372;C-TOY-14.2-800-N    ;Aktivní;16.09.2025;21.11.2025;16 dnů;10,000;10,000;0,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;16.09.2025 13:47;137 830,00
+;SD20250267;640127787;C-TOY-14.1-800-N ,  ;Aktivní;10.10.2025;21.11.2025;16 dnů;2,000;2,000;0,000;TOY-14.1-800-N_0000.00;DRAHOSOVA;10.10.2025 07:31;31 406,82
+;SD20250246;640127372;C-TOY-14.2-DK-N  ,;Aktivní;16.09.2025;24.11.2025;17 dnů;1,000;1,000;0,000;TOY-14.2-DK-N_0000.00 vers. 00;DRAHOSOVA;16.09.2025 13:52;13 494,52
+;SD20250247;640127372;C-TOY-14.4-L-800,    ;Aktivní;16.09.2025;24.11.2025;17 dnů;1,000;1,000;0,000;TOY-14.4-L-800_0000.00;DRAHOSOVA;16.09.2025 13:50;16 595,06
+;SD20250248;640127372;C-TOY-14.4-R-800   ,  ;Aktivní;16.09.2025;24.11.2025;17 dnů;1,000;1,000;0,000;TOY-14.4-R-800_0000.00;DRAHOSOVA;16.09.2025 13:51;16 595,06
+;SD20250270;640128243;C-TOY-14.7-800 BEZ ELE.NASTAVENÍ !!!  ,;Aktivní;13.10.2025;24.11.2025;17 dnů;5,000;5,000;0,000;TOY-14.7-800_0000.00 vers. 00;DRAHOSOVA;13.10.2025 09:51;47 616,95
+;SD20250271;640128243;C-TOY-14.9-L-800 BEZ ELE.NASTAVENÍ,;Aktivní;13.10.2025;24.11.2025;17 dnů;1,000;1,000;0,000;TOY-14.9-L-800_0000.00;DRAHOSOVA;13.10.2025 09:51;14 603,68
+;SD20250300;640128651;C-TOY-14.4-L-800-N   ,  ;Aktivní;22.10.2025;25.11.2025;18 dnů;6,000;6,000;0,000;TOY-14.4-L-800-N_0000.00;DRAHOSOVA;22.10.2025 14:22;103 575,36
+;SD20250299;640128651;C-TOY-14.3-R-800-N ,   ;Aktivní;22.10.2025;25.11.2025;18 dnů;3,000;3,000;0,000;TOY-14.3-R-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 14:21;52 537,68
+;SD20250276;640128244;C-TOY-14.4-L-800-N   , ;Aktivní;13.10.2025;25.11.2025;18 dnů;2,000;2,000;0,000;TOY-14.4-L-800-N_0000.00;DRAHOSOVA;13.10.2025 10:41;34 525,12
+;SD20250274;640128244;C-TOY-14.1-800-N ,   ;Aktivní;13.10.2025;25.11.2025;18 dnů;3,000;3,000;0,000;TOY-14.1-800-N_0000.00;DRAHOSOVA;13.10.2025 10:38;47 110,23
+;SD20250268;640127787;C-TOY-14.4-L-800-N   ,;Aktivní;10.10.2025;25.11.2025;18 dnů;1,000;1,000;0,000;TOY-14.4-L-800-N_0000.00;DRAHOSOVA;10.10.2025 07:32;17 262,56
+;SD20250301;640128651;C-TOY-14.4-800-N     ,;Aktivní;22.10.2025;25.11.2025;18 dnů;2,000;2,000;0,000;TOY-14.4-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 14:24;31 886,92
+;SD20250273;640128243;C-TOY-14.2-DK-N  ,;Aktivní;13.10.2025;26.11.2025;19 dnů;8,000;8,000;0,000;TOY-14.2-DK-N_0000.00 vers. 00;DRAHOSOVA;13.10.2025 09:51;107 956,16
+;SD20250272;640128243;C-TOY-14.2-800-N    ;Aktivní;13.10.2025;26.11.2025;19 dnů;10,000;10,000;0,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;13.10.2025 09:48;137 830,00
+;SD20250286;640128244;C-TOY-14.4-R-800-N   ,;Aktivní;21.10.2025;28.11.2025;21 dnů;1,000;1,000;0,000;TOY-14.4-R-800-N_0000.00;DRAHOSOVA;21.10.2025 14:31;17 342,16
+;SD20250275;640128244;C-TOY-14.3-R-800-N ,  ;Aktivní;13.10.2025;01.12.2025;22 dnů;2,000;2,000;0,000;TOY-14.3-R-800-N_0000.00 vers. 00;DRAHOSOVA;13.10.2025 10:39;35 025,12
+;SD20250297;640128652;C-TOY-14.2-800-N      ;Aktivní;22.10.2025;01.12.2025;22 dnů;14,000;14,000;0,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 14:15;192 962,00
+;CC20250187;640128652;C-TOY-14.3-L-800-N ,  ;Aktivní;22.10.2025;01.12.2025;22 dnů;5,000;5,000;0,000;TOY-14.3-L-800-N_0000.00;DRAHOSOVA;22.10.2025 14:16;87 563,32
+;SD20250298;640128652;C-TOY-14.6-800-N BEZ ELE. NASTAVENÍ !!!, ;Aktivní;22.10.2025;01.12.2025;22 dnů;5,000;5,000;0,000;TOY-14.6-800-N_0000.00;DRAHOSOVA;22.10.2025 14:17;66 182,70
+;SD20250295;640128653;C-TOY-14.1-800-N ,    ;Aktivní;22.10.2025;04.12.2025;25 dnů;6,000;6,000;0,000;TOY-14.1-800-N_0000.00;DRAHOSOVA;22.10.2025 14:09;94 220,46
+;SD20250296;640128653;C-TOY-14.4-800-N   ,  ;Aktivní;22.10.2025;04.12.2025;25 dnů;5,000;5,000;0,000;TOY-14.4-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 14:10;79 717,30
+;SD20250293;640128654;C-TOY-14.6-800 BEZ ELE.NASTAVENÍ !!!  ,;Aktivní;22.10.2025;05.12.2025;26 dnů;4,000;4,000;0,000;TOY-14.6-800_0000.00 vers. 00;DRAHOSOVA;22.10.2025 14:07;36 173,56
+;SD20250294;640128654;C-TOY-14.7-800 BEZ ELE.NASTAVENÍ !!!  , ;Aktivní;22.10.2025;05.12.2025;26 dnů;1,000;1,000;0,000;TOY-14.7-800_0000.00 vers. 00;DRAHOSOVA;22.10.2025 13:53;9 523,39
+;SD20250290;640128655;C-TOY-14.2-800-N     ;Aktivní;22.10.2025;08.12.2025;27 dnů;15,000;15,000;0,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 13:22;206 745,00
+;SD20250291;640128655;C-TOY-14.3-R-800-N ,   ;Aktivní;22.10.2025;08.12.2025;27 dnů;7,000;7,000;0,000;TOY-14.3-R-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 13:46;122 587,92
+;SD20250292;640128655;C-TOY-14.3-L-800-N , ;Aktivní;22.10.2025;08.12.2025;27 dnů;3,000;3,000;0,000;TOY-14.3-L-800-N_0000.00;DRAHOSOVA;22.10.2025 13:46;52 538,01
+;SD20250277;640128244;C-TOY-14.4-R-800-N   ,;Aktivní;13.10.2025;12.12.2025;31 dnů;1,000;1,000;0,000;TOY-14.4-R-800-N_0000.00;DRAHOSOVA;21.10.2025 14:31;17 342,16
+;SD20250288;640128656;C-TOY-14.4-800-N   , ;Aktivní;22.10.2025;16.12.2025;33 dnů;3,000;3,000;0,000;TOY-14.4-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 13:14;47 830,38
+;SD20250289;640128656;C-TOY-14.1-800-N ,    ;Aktivní;22.10.2025;16.12.2025;33 dnů;4,000;4,000;0,000;TOY-14.1-800-N_0000.00;DRAHOSOVA;22.10.2025 13:15;62 813,64
+;SD20250278;640128244;C-TOY-14.2-800-N    ;Aktivní;13.10.2025;18.12.2025;35 dnů;10,000;10,000;0,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;13.10.2025 11:02;137 830,00
+;SD20250287;640128657;C-TOY-14.2-800-N    ;Aktivní;22.10.2025;06.01.2026;---- dnů;10,000;10,000;0,000;TOY-14.2-800-N_0000.00 vers. 00;DRAHOSOVA;22.10.2025 13:08;137 830,00
+;SD20250279;640128245;C-TOY-14.3-L-800-N , ;Aktivní;13.10.2025;15.01.2026;---- dnů;2,000;2,000;0,000;TOY-14.3-L-800-N_0000.00;DRAHOSOVA;13.10.2025 11:14;35 025,31`;
+
+        let allData = [];
+
+        Papa.parse(csvData, {
+            delimiter: ';',
+            header: true,
+            complete: function(results) {
+                // Filtrovat pouze záznamy s číslem objednávky A termínem dokončení <= 9 dní
+                allData = results.data.filter(row => {
+                    if (!row['Číslo objednávky']) return false;
+                    
+                    const termStr = row['Do dokončení zbývá'];
+                    if (!termStr) return false;
+                    
+                    // Extrahovat číslo z řetězce (např. "3 dny" -> 3)
+                    const match = termStr.match(/(\d+)/);
+                    if (!match) return false; // Pokud není číslo (např. "---- dnů"), vyfiltrovat
+                    
+                    const days = parseInt(match[1]);
+                    return days <= 9;
+                });
+                
+                renderStats();
+                renderCharts();
+                renderTable(allData);
+                
+                document.getElementById('searchInput').addEventListener('input', function(e) {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const filtered = allData.filter(row => 
+                        Object.values(row).some(val => 
+                            String(val).toLowerCase().includes(searchTerm)
+                        )
+                    );
+                    renderTable(filtered);
+                });
+            }
+        });
+
+        function parseNumber(str) {
+            if (!str) return 0;
+            return parseFloat(str.replace(',', '.').replace(/\s/g, '')) || 0;
+        }
+
+        function formatCurrency(num) {
+            return new Intl.NumberFormat('cs-CZ', { 
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2 
+            }).format(num) + ' Kč';
+        }
+
+        function renderStats() {
+            const totalItems = allData.length;
+            const totalMaterial = allData.reduce((sum, row) => sum + parseNumber(row['Materiál predpokl.']), 0);
+            const totalPlanMJ = allData.reduce((sum, row) => sum + parseNumber(row['Plán MJ']), 0);
+            
+            const uniqueOrders = [...new Set(allData.map(row => row['Číslo objednávky']))].length;
+
+            const statsHTML = `
+                <div class="stat-card">
+                    <h3>Celkem položek</h3>
+                    <div class="value">${totalItems}</div>
+                    <div class="label">Aktivních dodacích listů</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Celkový materiál</h3>
+                    <div class="value">${formatCurrency(totalMaterial)}</div>
+                    <div class="label">Předpokládaný</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Plánováno MJ</h3>
+                    <div class="value">${totalPlanMJ.toFixed(0)}</div>
+                    <div class="label">Celkem kusů</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Objednávky</h3>
+                    <div class="value">${uniqueOrders}</div>
+                    <div class="label">Unikátních</div>
+                </div>
+            `;
+            
+            document.getElementById('statsGrid').innerHTML = statsHTML;
+        }
+
+        function renderCharts() {
+            // Chart: Materiál podle objednávek
+            const orderTotals = {};
+            allData.forEach(row => {
+                const order = row['Číslo objednávky'];
+                const value = parseNumber(row['Materiál predpokl.']);
+                orderTotals[order] = (orderTotals[order] || 0) + value;
+            });
+
+            const orderLabels = Object.keys(orderTotals);
+            const colors = [
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(236, 72, 153, 0.8)',
+                'rgba(16, 185, 129, 0.8)'
+            ];
+            const borderColors = [
+                'rgba(37, 99, 235, 1)',
+                'rgba(219, 39, 119, 1)',
+                'rgba(5, 150, 105, 1)'
+            ];
+
+            new Chart(document.getElementById('chartObjednavky'), {
+                type: 'bar',
+                data: {
+                    labels: orderLabels,
+                    datasets: [{
+                        label: 'Materiál předpokl. (Kč)',
+                        data: Object.values(orderTotals),
+                        backgroundColor: orderLabels.map((_, i) => colors[i % colors.length]),
+                        borderColor: orderLabels.map((_, i) => borderColors[i % borderColors.length]),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTable(data) {
+            const tableBody = document.getElementById('tableBody');
+            
+            // Seřadit data podle počtu dní do dokončení (vzestupně)
+            const sortedData = [...data].sort((a, b) => {
+                const getDays = (str) => {
+                    const match = str.match(/(\d+)/);
+                    return match ? parseInt(match[1]) : 999;
+                };
+                
+                const daysA = getDays(a['Do dokončení zbývá'] || '999');
+                const daysB = getDays(b['Do dokončení zbývá'] || '999');
+                
+                return daysA - daysB;
+            });
+            
+            // Rozdělit řádky podle Plán MJ
+            const expandedData = [];
+            sortedData.forEach(row => {
+                const planMJ = parseNumber(row['Plán MJ']);
+                const quantity = Math.floor(planMJ);
+                
+                if (quantity > 1) {
+                    // Rozdělení materiálu
+                    const materialPerUnit = parseNumber(row['Materiál predpokl.']) / quantity;
+                    
+                    // Vytvoření více řádků
+                    for (let i = 1; i <= quantity; i++) {
+                        expandedData.push({
+                            ...row,
+                            'Kód': `${row['Kód']}_${i}`,
+                            'Plán MJ': '1,000',
+                            'Zbývá vydat na dod. listech': '1,000',
+                            'Materiál predpokl.': materialPerUnit.toFixed(2).replace('.', ',')
+                        });
+                    }
+                } else {
+                    // Ponechat původní řádek, ale srovnat Zbývá vydat s Plán MJ
+                    expandedData.push({
+                        ...row,
+                        'Zbývá vydat na dod. listech': row['Plán MJ']
+                    });
+                }
+            });
+            
+            // Získat unikátní objednávky pro barevné skupiny
+            const uniqueOrders = [...new Set(expandedData.map(row => row['Číslo objednávky']))];
+            const orderColorMap = {};
+            uniqueOrders.forEach((order, index) => {
+                orderColorMap[order] = `order-group-${index % 3}`;
+            });
+            
+            tableBody.innerHTML = expandedData.map((row, index) => {
+                const qrData = `Objednávka: ${row['Číslo objednávky']}\nKód: ${row['Kód']}\nZakázka: ${row['Název zakázky']}`;
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
+                
+                return `
+                <tr class="${orderColorMap[row['Číslo objednávky']]}">
+                    <td><img src="${qrUrl}" class="qr-code" alt="QR Code" title="Najeďte pro zvětšení"></td>
+                    <td>${row['Dodací list číslo'] || '-'}</td>
+                    <td>${row['Kód']}</td>
+                    <td><strong>${row['Číslo objednávky']}</strong></td>
+                    <td>${row['Název zakázky']}</td>
+                    <td><span class="status-badge status-aktivni">${row['Stav']}</span></td>
+                    <td>${row['Zadáno'] || '-'}</td>
+                    <td>${row['Termín do']}</td>
+                    <td>${row['Do dokončení zbývá'] || '-'}</td>
+                    <td>${row['Plán MJ']}</td>
+                    <td>${row['Zbývá vydat na dod. listech']}</td>
+                    <td>${row['Vydáno na dod. listech']}</td>
+                    <td><strong>${formatCurrency(parseNumber(row['Materiál predpokl.']))}</strong></td>
+                    <td>${row['Vytvořil']}</td>
+                </tr>
+            `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
